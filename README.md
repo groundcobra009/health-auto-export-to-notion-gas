@@ -177,7 +177,7 @@ health-auto-export-to-notion-gas/
 
 ### データがNotionに反映されない
 
-1. `HAE_Raw` シートに受信ログがあるか確認
+1. `HAE_Log` シートに受信ログがあるか確認
 2. `HAE_Daily` シートにデータがあるか確認
 3. Notion TokenとDB IDが設定されているか確認
 
@@ -191,7 +191,6 @@ GASは以下のシートを作成します。メニューの「📋 シート初
 |----------|------|
 | `HAE_Settings` | 設定表示用（マスク表示、WebApp URL、統計情報） |
 | `HAE_Log` | 操作ログ（受信、エラー、設定変更など） |
-| `HAE_Raw` | 受信したJSONの生ログ（デバッグ用） |
 | `HAE_Hourly` | 1時間粒度の時系列データ |
 | `HAE_Daily` | 日次集計データ（Notionに送る内容の写し） |
 

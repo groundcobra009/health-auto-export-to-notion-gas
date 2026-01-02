@@ -25,6 +25,22 @@ const SETTINGS_KEYS = {
 const NOTION_VERSION = "2022-06-28"; // 必要なら変更
 const TZ = "Asia/Tokyo";
 
+// シート名定義
+const SHEET_NAMES = {
+  SETTINGS: "HAE_Settings",
+  LOG: "HAE_Log",
+  HOURLY: "HAE_Hourly",
+  DAILY: "HAE_Daily",
+};
+
+// ログレベル
+const LOG_LEVEL = {
+  INFO: "INFO",
+  WARN: "WARN",
+  ERROR: "ERROR",
+  DEBUG: "DEBUG",
+};
+
 // Notionプロパティ名（Notion側の列名に合わせて変更）
 const NOTION_PROPS = {
   TITLE: "タイトル", // Title property
@@ -39,11 +55,17 @@ const NOTION_PROPS = {
   SESSION_ID: "セッションID",
 };
 
+// ========================================
+// メニュー
+// ========================================
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("Health Auto Export")
-    .addItem("設定を開く", "openSettingsSidebar")
-    .addItem("Notion接続テスト", "testNotionConnectionFromMenu")
+    .addItem("⚙️ 設定", "openSettingsSidebar")
+    .addItem("📋 シート初期化", "initializeSheetsFromMenu")
+    .addSeparator()
+    .addItem("❓ 使い方・ヘルプ", "openHelpDialog")
     .addToUi();
 }
 
@@ -52,6 +74,244 @@ function openSettingsSidebar() {
     .setTitle("Health Auto Export 設定");
   SpreadsheetApp.getUi().showSidebar(html);
 }
+
+function openHelpDialog() {
+  const html = HtmlService.createHtmlOutputFromFile("Help")
+    .setWidth(600)
+    .setHeight(500);
+  SpreadsheetApp.getUi().showModalDialog(html, "使い方・ヘルプ");
+}
+
+// ========================================
+// シート初期化
+// ========================================
+
+/**
+ * メニューからシート初期化
+ */
+function initializeSheetsFromMenu() {
+  const ui = SpreadsheetApp.getUi();
+  const result = ui.alert(
+    "シート初期化",
+    "以下のシートを作成/確認します:\n\n" +
+    "• HAE_Settings（設定表示用）\n" +
+    "• HAE_Log（操作ログ）\n" +
+    "• HAE_Hourly（時間データ）\n" +
+    "• HAE_Daily（日次データ）\n\n" +
+    "実行しますか？",
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (result === ui.Button.OK) {
+    initializeAllSheets();
+    log_(LOG_LEVEL.INFO, "シート初期化", "メニューからシート初期化を実行しました");
+    ui.alert("✅ シート初期化完了", "全てのシートが作成/確認されました。", ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * 全シートを初期化
+ */
+function initializeAllSheets() {
+  const ss = SpreadsheetApp.getActive();
+
+  // Settings シート
+  createSettingsSheet_(ss);
+
+  // Log シート
+  createSheetIfMissing_(ss, SHEET_NAMES.LOG, [
+    "timestamp", "level", "category", "message", "details"
+  ]);
+
+  // データシート
+  createSheetIfMissing_(ss, SHEET_NAMES.HOURLY, ["timestamp_hour", "metric", "value", "unit", "dateKey", "source"]);
+  createSheetIfMissing_(ss, SHEET_NAMES.DAILY, ["dateKey", "steps", "activeEnergyKcal", "distanceKm", "sleepMin", "weightKg", "bodyFatPct", "updatedAt"]);
+
+  // 設定値をSettingsシートに反映
+  syncSettingsToSheet_();
+}
+
+/**
+ * サイドバーから呼び出す用（UIなし）
+ */
+function initializeSheetsForUi() {
+  try {
+    initializeAllSheets();
+    return { ok: true, message: "シートを初期化しました" };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+/**
+ * Settings シート作成
+ */
+function createSettingsSheet_(ss) {
+  let sh = ss.getSheetByName(SHEET_NAMES.SETTINGS);
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_NAMES.SETTINGS);
+  }
+
+  // ヘッダー設定
+  const headers = ["設定項目", "値", "説明"];
+  const firstRow = sh.getRange(1, 1, 1, headers.length).getValues()[0];
+  if (firstRow.every(v => !v)) {
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sh.setFrozenRows(1);
+
+    // 列幅調整
+    sh.setColumnWidth(1, 200);
+    sh.setColumnWidth(2, 300);
+    sh.setColumnWidth(3, 300);
+
+    // ヘッダースタイル
+    sh.getRange(1, 1, 1, headers.length)
+      .setBackground("#4285f4")
+      .setFontColor("#ffffff")
+      .setFontWeight("bold");
+  }
+
+  // 設定項目の定義
+  const settingsData = [
+    ["Notion Token", "", "Notion Integration Token（secret_xxx...）"],
+    ["Notion Database ID", "", "NotionのDatabase ID（32文字）"],
+    ["HAE Bearer Token", "", "HAEからの受信認証用トークン（任意）"],
+    ["Error Webhook URL", "", "エラー通知用Webhook URL（任意）"],
+    ["---", "---", "---"],
+    ["WebApp URL", "", "HAEに設定するURL（デプロイ後に自動取得）"],
+    ["最終受信日時", "", "最後にHAEからデータを受信した日時"],
+    ["総受信回数", "", "HAEからの受信回数"],
+  ];
+
+  // 既存データがなければ初期値を設定
+  const lastRow = sh.getLastRow();
+  if (lastRow <= 1) {
+    sh.getRange(2, 1, settingsData.length, 3).setValues(settingsData);
+  }
+}
+
+/**
+ * ScriptPropertiesの設定をSettingsシートに同期
+ */
+function syncSettingsToSheet_() {
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName(SHEET_NAMES.SETTINGS);
+  if (!sh) return;
+
+  const s = getSettings_();
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return;
+
+  const data = sh.getRange(2, 1, lastRow - 1, 2).getValues();
+
+  for (let i = 0; i < data.length; i++) {
+    const key = data[i][0];
+    let value = "";
+
+    switch (key) {
+      case "Notion Token":
+        value = s.notionToken ? maskValue_(s.notionToken) : "(未設定)";
+        break;
+      case "Notion Database ID":
+        value = s.notionDatabaseId ? maskValue_(s.notionDatabaseId) : "(未設定)";
+        break;
+      case "HAE Bearer Token":
+        value = s.haeBearerToken ? maskValue_(s.haeBearerToken) : "(未設定)";
+        break;
+      case "Error Webhook URL":
+        value = s.errorWebhookUrl ? maskValue_(s.errorWebhookUrl) : "(未設定)";
+        break;
+      case "WebApp URL":
+        try {
+          const url = ScriptApp.getService().getUrl();
+          value = url || "(未デプロイ)";
+        } catch (_) {
+          value = "(未デプロイ)";
+        }
+        break;
+    }
+
+    if (value && key !== "---") {
+      sh.getRange(i + 2, 2).setValue(value);
+    }
+  }
+}
+
+/**
+ * 値をマスク表示
+ */
+function maskValue_(value) {
+  if (!value) return "";
+  if (value.length <= 8) return "●".repeat(value.length);
+  return value.substring(0, 4) + "●●●●" + value.substring(value.length - 4);
+}
+
+// ========================================
+// ログ機能
+// ========================================
+
+/**
+ * ログを記録
+ */
+function log_(level, category, message, details) {
+  try {
+    const ss = SpreadsheetApp.getActive();
+    let sh = ss.getSheetByName(SHEET_NAMES.LOG);
+
+    // シートがなければ作成
+    if (!sh) {
+      createSheetIfMissing_(ss, SHEET_NAMES.LOG, [
+        "timestamp", "level", "category", "message", "details"
+      ]);
+      sh = ss.getSheetByName(SHEET_NAMES.LOG);
+    }
+
+    const timestamp = new Date();
+    const detailsStr = details ? (typeof details === "object" ? JSON.stringify(details) : String(details)) : "";
+
+    sh.appendRow([timestamp, level, category, message, detailsStr]);
+
+    // ログが1000行を超えたら古いログを削除（パフォーマンス対策）
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1000) {
+      sh.deleteRows(2, lastRow - 1000);
+    }
+  } catch (e) {
+    // ログ記録自体のエラーは無視（無限ループ防止）
+    console.error("Log error:", e);
+  }
+}
+
+/**
+ * 受信統計を更新
+ */
+function updateReceiveStats_() {
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName(SHEET_NAMES.SETTINGS);
+  if (!sh) return;
+
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return;
+
+  const data = sh.getRange(2, 1, lastRow - 1, 2).getValues();
+
+  for (let i = 0; i < data.length; i++) {
+    const key = data[i][0];
+
+    if (key === "最終受信日時") {
+      sh.getRange(i + 2, 2).setValue(new Date());
+    }
+
+    if (key === "総受信回数") {
+      const current = parseInt(data[i][1]) || 0;
+      sh.getRange(i + 2, 2).setValue(current + 1);
+    }
+  }
+}
+
+// ========================================
+// 設定管理
+// ========================================
 
 function getSettings_() {
   const p = PropertiesService.getScriptProperties();
@@ -76,8 +336,17 @@ function saveSettingsFromUi(obj) {
   if (obj.haeBearerToken !== undefined) p.setProperty(SETTINGS_KEYS.HAE_BEARER_TOKEN, String(obj.haeBearerToken || "").trim());
   if (obj.errorWebhookUrl !== undefined) p.setProperty(SETTINGS_KEYS.ERROR_WEBHOOK_URL, String(obj.errorWebhookUrl || "").trim());
 
+  // Settingsシートに同期
+  syncSettingsToSheet_();
+
+  log_(LOG_LEVEL.INFO, "設定", "設定を保存しました");
+
   return { ok: true };
 }
+
+// ========================================
+// テスト・検証機能
+// ========================================
 
 function testNotionConnectionFromMenu() {
   const res = testNotionConnection();
@@ -93,9 +362,13 @@ function testNotionConnection() {
     // データベースに対して軽いquery
     const url = `https://api.notion.com/v1/databases/${encodeURIComponent(s.notionDatabaseId)}/query`;
     const resp = notionFetch_(url, "post", s.notionToken, { page_size: 1 });
-    if (resp && resp.object) return { ok: true };
+    if (resp && resp.object) {
+      log_(LOG_LEVEL.INFO, "Notion", "接続テスト成功");
+      return { ok: true };
+    }
     return { ok: false, error: "Unexpected response" };
   } catch (e) {
+    log_(LOG_LEVEL.ERROR, "Notion", "接続テスト失敗", { error: String(e) });
     return { ok: false, error: String(e) };
   }
 }
@@ -161,6 +434,7 @@ function validateNotionDatabaseProperties() {
     }
 
     if (missing.length === 0 && typeMismatch.length === 0) {
+      log_(LOG_LEVEL.INFO, "Notion", "プロパティ検証成功", { dbTitle });
       return {
         ok: true,
         dbTitle: dbTitle,
@@ -177,8 +451,10 @@ function validateNotionDatabaseProperties() {
       errorMsg += `\n⚠️ 型不一致: ${typeMismatch.join("; ")}`;
     }
 
+    log_(LOG_LEVEL.WARN, "Notion", "プロパティ検証に問題あり", { missing, typeMismatch });
     return { ok: false, error: errorMsg, dbTitle: dbTitle, missing, typeMismatch };
   } catch (e) {
+    log_(LOG_LEVEL.ERROR, "Notion", "プロパティ検証エラー", { error: String(e) });
     return { ok: false, error: String(e) };
   }
 }
@@ -218,6 +494,8 @@ function testHaeReceive() {
       sessionId: "TEST_SESSION_" + now.getTime(),
     };
 
+    log_(LOG_LEVEL.INFO, "テスト", "テスト受信を開始", { dateKey });
+
     // 処理を実行
     const extracted = extractFromHealthAutoExport_(samplePayload);
 
@@ -239,6 +517,8 @@ function testHaeReceive() {
       }
     }
 
+    log_(LOG_LEVEL.INFO, "テスト", "テスト受信完了", { dateKey, hourlyRows: extracted.hourlyRows.length, notion: notionResult });
+
     return {
       ok: true,
       message: `テスト受信成功 ✅\n\n📅 日付: ${dateKey}\n📊 Hourly行数: ${extracted.hourlyRows.length}\n📝 Notion: ${notionResult}`,
@@ -246,6 +526,7 @@ function testHaeReceive() {
       hourlyRowCount: extracted.hourlyRows.length,
     };
   } catch (e) {
+    log_(LOG_LEVEL.ERROR, "テスト", "テスト受信失敗", { error: String(e) });
     return { ok: false, error: String(e) };
   }
 }
@@ -288,6 +569,10 @@ function getNotionDatabaseSchema() {
   };
 }
 
+// ========================================
+// WebApp エンドポイント
+// ========================================
+
 /**
  * WebApp endpoint
  */
@@ -300,11 +585,12 @@ function doPost(e) {
     const raw = (e && e.postData && e.postData.contents) ? e.postData.contents : "";
     const payload = raw ? JSON.parse(raw) : null;
 
-    appendRaw_(raw, e);
-
     if (!payload || !payload.data) {
+      log_(LOG_LEVEL.WARN, "受信", "payload.dataが空", { raw: raw.substring(0, 200) });
       return text_(400, "Missing payload.data");
     }
+
+    log_(LOG_LEVEL.INFO, "受信", "HAEからデータ受信", { size: raw.length });
 
     const extracted = extractFromHealthAutoExport_(payload);
 
@@ -319,8 +605,14 @@ function doPost(e) {
       upsertNotionDaily_(dateKey, daily, extracted.meta);
     }
 
+    // 統計更新
+    updateReceiveStats_();
+
+    log_(LOG_LEVEL.INFO, "受信", "処理完了", { dateKeys, hourlyRows: extracted.hourlyRows.length });
+
     return text_(200, "ok");
   } catch (err) {
+    log_(LOG_LEVEL.ERROR, "受信", "処理エラー", { error: String(err) });
     notifyError_(err);
     return text_(500, "error: " + String(err));
   }
@@ -339,14 +631,20 @@ function verifyAuth_(e) {
   const qAuth = auth || (e && e.parameter && e.parameter.auth) ? String(e.parameter.auth) : "";
 
   const token = qAuth.startsWith("Bearer ") ? qAuth.slice("Bearer ".length).trim() : qAuth.trim();
-  if (token !== expected) throw new Error("Unauthorized (token mismatch)");
+  if (token !== expected) {
+    log_(LOG_LEVEL.WARN, "認証", "認証失敗（トークン不一致）");
+    throw new Error("Unauthorized (token mismatch)");
+  }
 }
+
+// ========================================
+// シート操作
+// ========================================
 
 function ensureSheets_() {
   const ss = SpreadsheetApp.getActive();
-  createSheetIfMissing_(ss, "HAE_Raw", ["receivedAt", "contentType", "rawJson"]);
-  createSheetIfMissing_(ss, "HAE_Hourly", ["timestamp_hour", "metric", "value", "unit", "dateKey", "source"]);
-  createSheetIfMissing_(ss, "HAE_Daily", ["dateKey", "steps", "activeEnergyKcal", "distanceKm", "sleepMin", "weightKg", "bodyFatPct", "updatedAt"]);
+  createSheetIfMissing_(ss, SHEET_NAMES.HOURLY, ["timestamp_hour", "metric", "value", "unit", "dateKey", "source"]);
+  createSheetIfMissing_(ss, SHEET_NAMES.DAILY, ["dateKey", "steps", "activeEnergyKcal", "distanceKm", "sleepMin", "weightKg", "bodyFatPct", "updatedAt"]);
 }
 
 function createSheetIfMissing_(ss, name, headers) {
@@ -356,26 +654,24 @@ function createSheetIfMissing_(ss, name, headers) {
   if (firstRow.every(v => !v)) {
     sh.getRange(1, 1, 1, headers.length).setValues([headers]);
     sh.setFrozenRows(1);
-  }
-}
 
-function appendRaw_(raw, e) {
-  const ss = SpreadsheetApp.getActive();
-  const sh = ss.getSheetByName("HAE_Raw");
-  const receivedAt = new Date();
-  const contentType = (e && e.postData && e.postData.type) ? e.postData.type : "";
-  sh.appendRow([receivedAt, contentType, raw]);
+    // ヘッダースタイル
+    sh.getRange(1, 1, 1, headers.length)
+      .setBackground("#4285f4")
+      .setFontColor("#ffffff")
+      .setFontWeight("bold");
+  }
 }
 
 function appendHourly_(rows) {
   const ss = SpreadsheetApp.getActive();
-  const sh = ss.getSheetByName("HAE_Hourly");
+  const sh = ss.getSheetByName(SHEET_NAMES.HOURLY);
   for (const r of rows) sh.appendRow(r);
 }
 
 function upsertDailySheet_(dateKey, daily) {
   const ss = SpreadsheetApp.getActive();
-  const sh = ss.getSheetByName("HAE_Daily");
+  const sh = ss.getSheetByName(SHEET_NAMES.DAILY);
   const lastRow = sh.getLastRow();
   const values = (lastRow >= 2) ? sh.getRange(2, 1, lastRow - 1, 1).getValues().flat() : [];
   const idx = values.findIndex(v => String(v) === String(dateKey));
@@ -395,6 +691,10 @@ function upsertDailySheet_(dateKey, daily) {
     sh.appendRow(row);
   }
 }
+
+// ========================================
+// HAE データ抽出
+// ========================================
 
 /**
  * HAE JSON -> hourly rows + daily aggregates
@@ -511,6 +811,10 @@ function extractFromHealthAutoExport_(payload) {
   return { meta, hourlyRows, dailyByDate };
 }
 
+// ========================================
+// ユーティリティ
+// ========================================
+
 function parseDate_(s) {
   try {
     // HAEの日付は "yyyy-MM-dd HH:mm:ss Z" 形式等
@@ -578,6 +882,10 @@ function normalizeBodyFat_(qty, unit) {
   return qty;
 }
 
+// ========================================
+// Notion 連携
+// ========================================
+
 /**
  * Notion: dateKey(yyyy-MM-dd) の行を upsert
  * - Query database endpoint
@@ -587,11 +895,18 @@ function upsertNotionDaily_(dateKey, daily, meta) {
   const s = getSettings_();
   if (!s.notionToken || !s.notionDatabaseId) return; // 未設定ならスキップ
 
-  const existing = findNotionPageByDate_(s.notionToken, s.notionDatabaseId, dateKey);
-  if (existing && existing.id) {
-    updateNotionPage_(s.notionToken, existing.id, dateKey, daily, meta);
-  } else {
-    createNotionPage_(s.notionToken, s.notionDatabaseId, dateKey, daily, meta);
+  try {
+    const existing = findNotionPageByDate_(s.notionToken, s.notionDatabaseId, dateKey);
+    if (existing && existing.id) {
+      updateNotionPage_(s.notionToken, existing.id, dateKey, daily, meta);
+      log_(LOG_LEVEL.DEBUG, "Notion", "ページ更新", { dateKey, pageId: existing.id });
+    } else {
+      createNotionPage_(s.notionToken, s.notionDatabaseId, dateKey, daily, meta);
+      log_(LOG_LEVEL.DEBUG, "Notion", "ページ作成", { dateKey });
+    }
+  } catch (e) {
+    log_(LOG_LEVEL.ERROR, "Notion", "upsert失敗", { dateKey, error: String(e) });
+    throw e;
   }
 }
 
@@ -684,6 +999,10 @@ function notionFetch_(url, method, token, bodyObj) {
   return text ? JSON.parse(text) : {};
 }
 
+// ========================================
+// エラー通知
+// ========================================
+
 function notifyError_(err) {
   const s = getSettings_();
   const url = (s.errorWebhookUrl || "").trim();
@@ -706,4 +1025,3 @@ function text_(code, msg) {
     .createTextOutput(msg)
     .setMimeType(ContentService.MimeType.TEXT);
 }
-

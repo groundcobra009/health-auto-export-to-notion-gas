@@ -42,17 +42,20 @@
       .eyeBtn {
         width: 34px;
         height: 34px;
+        min-width: 34px;
         border: 1px solid #ccc;
         border-radius: 6px;
         background: #fff;
         cursor: pointer;
-        display: grid;
-        place-items: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         user-select: none;
         font-size: 16px;
         transition: background 0.2s;
       }
       .eyeBtn:hover { background: #f5f5f5; }
+      .eyeBtn.active { background: #e8f0fe; border-color: #4a90d9; }
       .btnRow {
         display: flex;
         flex-wrap: wrap;
@@ -171,7 +174,7 @@
       <div class="label">Notion Integration Token <span class="badge required">必須</span></div>
       <div class="fieldWrap">
         <input id="notionToken" type="password" autocomplete="off" placeholder="secret_xxx..." />
-        <div class="eyeBtn" onclick="toggleMask('notionToken')" title="表示/非表示">👁</div>
+        <button type="button" class="eyeBtn" id="eyeBtn_notionToken" title="表示/非表示">👁</button>
       </div>
       <div class="hint">
         <a href="https://www.notion.so/my-integrations" target="_blank">Notion Integrations</a> で作成したトークン
@@ -182,7 +185,7 @@
       <div class="label">Notion Database ID <span class="badge required">必須</span></div>
       <div class="fieldWrap">
         <input id="notionDatabaseId" type="password" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-        <div class="eyeBtn" onclick="toggleMask('notionDatabaseId')" title="表示/非表示">👁</div>
+        <button type="button" class="eyeBtn" id="eyeBtn_notionDatabaseId" title="表示/非表示">👁</button>
       </div>
       <div class="hint">
         データベースURL: <code>notion.so/xxxxx?v=...</code> の xxxxx 部分
@@ -203,7 +206,7 @@
       <div class="label">HAE Bearer Token <span class="badge optional">任意</span></div>
       <div class="fieldWrap">
         <input id="haeBearerToken" type="password" autocomplete="off" placeholder="認証トークン（省略可）" />
-        <div class="eyeBtn" onclick="toggleMask('haeBearerToken')" title="表示/非表示">👁</div>
+        <button type="button" class="eyeBtn" id="eyeBtn_haeBearerToken" title="表示/非表示">👁</button>
       </div>
       <div class="hint">
         設定すると、HAEからの受信時に認証チェックを行います
@@ -229,11 +232,22 @@
       <div class="label">Webhook URL <span class="badge optional">任意</span></div>
       <div class="fieldWrap">
         <input id="errorWebhookUrl" type="password" autocomplete="off" placeholder="https://hooks.slack.com/..." />
-        <div class="eyeBtn" onclick="toggleMask('errorWebhookUrl')" title="表示/非表示">👁</div>
+        <button type="button" class="eyeBtn" id="eyeBtn_errorWebhookUrl" title="表示/非表示">👁</button>
       </div>
       <div class="hint">
         Discord / Slack 等のWebhook URLを設定するとエラー時に通知
       </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- シート管理 -->
+    <h3>📊 シート管理</h3>
+    <div class="hint" style="margin-bottom: 10px;">
+      初回利用時や、シートが削除された場合に実行してください
+    </div>
+    <div class="btnRow">
+      <button class="tertiary" onclick="initializeSheets()">📋 シート初期化</button>
     </div>
 
     <div class="divider"></div>
@@ -255,14 +269,19 @@
     </div>
 
     <script>
-      const MASK = "●●●●●●";
-      const real = {
+      // フィールドID一覧
+      const FIELD_IDS = ["notionToken", "notionDatabaseId", "haeBearerToken", "errorWebhookUrl"];
+
+      // 各フィールドの実際の値（サーバーから読み込んだ or ユーザーが入力した値）
+      const values = {
         notionToken: "",
         notionDatabaseId: "",
         haeBearerToken: "",
         errorWebhookUrl: "",
       };
-      const shown = {
+
+      // 表示中かどうか（true=テキスト表示、false=パスワード非表示）
+      const isVisible = {
         notionToken: false,
         notionDatabaseId: false,
         haeBearerToken: false,
@@ -272,36 +291,124 @@
       let cachedWebAppUrl = "";
       let cachedSchema = null;
 
+      // ステータス表示
       function setStatus(msg, type) {
         const el = document.getElementById("status");
         el.textContent = msg || "";
         el.className = "status" + (type ? " " + type : "");
       }
 
-      function applyMasked(id) {
-        const el = document.getElementById(id);
-        if (!real[id]) {
-          el.value = "";
-          return;
+      // フィールドの表示を更新
+      function updateFieldDisplay(id) {
+        const input = document.getElementById(id);
+        const eyeBtn = document.getElementById("eyeBtn_" + id);
+
+        if (isVisible[id]) {
+          // 表示モード
+          input.type = "text";
+          input.value = values[id];
+          eyeBtn.classList.add("active");
+          eyeBtn.textContent = "👁";
+        } else {
+          // 非表示モード
+          input.type = "password";
+          // 値がある場合は●で表示、ない場合は空
+          input.value = values[id] ? "●●●●●●●●" : "";
+          eyeBtn.classList.remove("active");
+          eyeBtn.textContent = "👁";
         }
-        el.value = shown[id] ? real[id] : MASK;
-        el.type = shown[id] ? "text" : "password";
       }
 
-      function toggleMask(id) {
-        shown[id] = !shown[id];
-        applyMasked(id);
+      // 目玉ボタンのクリック処理
+      function toggleVisibility(id) {
+        isVisible[id] = !isVisible[id];
+        updateFieldDisplay(id);
+        
+        // 表示モードにした場合、フォーカスを当てる
+        if (isVisible[id]) {
+          const input = document.getElementById(id);
+          input.focus();
+          input.select();
+        }
       }
 
+      // 入力変更時の処理
+      function handleInput(id) {
+        const input = document.getElementById(id);
+        
+        // 表示モードの場合のみ値を更新
+        if (isVisible[id]) {
+          values[id] = input.value;
+        }
+      }
+
+      // フォーカス時の処理
+      function handleFocus(id) {
+        const input = document.getElementById(id);
+        
+        // 非表示モードでフォーカスした場合、自動的に表示モードに切り替え
+        if (!isVisible[id]) {
+          isVisible[id] = true;
+          input.type = "text";
+          input.value = values[id];
+          document.getElementById("eyeBtn_" + id).classList.add("active");
+          
+          // テキストを選択
+          setTimeout(() => input.select(), 0);
+        }
+      }
+
+      // ブラー時の処理
+      function handleBlur(id) {
+        const input = document.getElementById(id);
+        
+        // 表示モードの場合、値を保存
+        if (isVisible[id]) {
+          values[id] = input.value;
+        }
+      }
+
+      // イベントリスナーの設定
+      function setupEventListeners() {
+        FIELD_IDS.forEach(id => {
+          const input = document.getElementById(id);
+          const eyeBtn = document.getElementById("eyeBtn_" + id);
+
+          // 目玉ボタンクリック
+          eyeBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            toggleVisibility(id);
+          });
+
+          // 入力時
+          input.addEventListener("input", () => handleInput(id));
+
+          // フォーカス時
+          input.addEventListener("focus", () => handleFocus(id));
+
+          // ブラー時
+          input.addEventListener("blur", () => handleBlur(id));
+        });
+      }
+
+      // 初期読み込み
       function load() {
         setStatus("読み込み中...", "info");
+
         google.script.run
           .withSuccessHandler((s) => {
-            real.notionToken = s.notionToken || "";
-            real.notionDatabaseId = s.notionDatabaseId || "";
-            real.haeBearerToken = s.haeBearerToken || "";
-            real.errorWebhookUrl = s.errorWebhookUrl || "";
-            Object.keys(real).forEach((k) => applyMasked(k));
+            // 値を保存
+            values.notionToken = s.notionToken || "";
+            values.notionDatabaseId = s.notionDatabaseId || "";
+            values.haeBearerToken = s.haeBearerToken || "";
+            values.errorWebhookUrl = s.errorWebhookUrl || "";
+
+            // 初期状態は全て非表示
+            FIELD_IDS.forEach(id => {
+              isVisible[id] = false;
+              updateFieldDisplay(id);
+            });
+
             setStatus("");
           })
           .withFailureHandler((e) => setStatus("読み込み失敗: " + e, "error"))
@@ -324,33 +431,46 @@
           .getWebAppUrl();
       }
 
-      function getInputValue(id) {
-        return shown[id] ? document.getElementById(id).value : real[id];
-      }
-
+      // 保存
       function save() {
+        // 表示モードのフィールドから最新値を取得
+        FIELD_IDS.forEach(id => {
+          if (isVisible[id]) {
+            values[id] = document.getElementById(id).value;
+          }
+        });
+
         const payload = {
-          notionToken: getInputValue("notionToken"),
-          notionDatabaseId: getInputValue("notionDatabaseId"),
-          haeBearerToken: getInputValue("haeBearerToken"),
-          errorWebhookUrl: getInputValue("errorWebhookUrl"),
+          notionToken: values.notionToken,
+          notionDatabaseId: values.notionDatabaseId,
+          haeBearerToken: values.haeBearerToken,
+          errorWebhookUrl: values.errorWebhookUrl,
         };
 
         setStatus("保存中...", "info");
+
         google.script.run
-          .withSuccessHandler(() => {
-            Object.keys(payload).forEach((k) => {
-              real[k] = payload[k] || "";
-              shown[k] = false;
-              applyMasked(k);
+          .withSuccessHandler((result) => {
+            // 保存成功後、非表示モードに戻す
+            FIELD_IDS.forEach(id => {
+              isVisible[id] = false;
+              updateFieldDisplay(id);
             });
             setStatus("✅ 設定を保存しました", "success");
           })
-          .withFailureHandler((e) => setStatus("保存失敗: " + e, "error"))
+          .withFailureHandler((e) => setStatus("❌ 保存失敗: " + e, "error"))
           .saveSettingsFromUi(payload);
       }
 
+      // Notion接続テスト
       function testNotion() {
+        // まず現在の入力値を保存
+        FIELD_IDS.forEach(id => {
+          if (isVisible[id]) {
+            values[id] = document.getElementById(id).value;
+          }
+        });
+
         setStatus("Notion接続テスト中...", "info");
         google.script.run
           .withSuccessHandler((res) => {
@@ -364,6 +484,7 @@
           .testNotionConnection();
       }
 
+      // プロパティ検証
       function validateNotionProps() {
         setStatus("プロパティを検証中...", "info");
         google.script.run
@@ -378,6 +499,7 @@
           .validateNotionDatabaseProperties();
       }
 
+      // HAEテスト受信
       function testHaeReceive() {
         setStatus("テスト受信中...", "info");
         google.script.run
@@ -392,6 +514,22 @@
           .testHaeReceive();
       }
 
+      // シート初期化
+      function initializeSheets() {
+        setStatus("シートを初期化中...", "info");
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (res.ok) {
+              setStatus("✅ " + res.message + "\n\n作成されるシート:\n• HAE_Settings\n• HAE_Log\n• HAE_Hourly\n• HAE_Daily", "success");
+            } else {
+              setStatus("❌ シート初期化失敗\n" + res.error, "error");
+            }
+          })
+          .withFailureHandler((e) => setStatus("初期化失敗: " + e, "error"))
+          .initializeSheetsForUi();
+      }
+
+      // WebApp URLコピー
       function copyWebAppUrl() {
         if (!cachedWebAppUrl) {
           setStatus("URLが取得できていません", "error");
@@ -402,6 +540,7 @@
           .catch(() => setStatus("コピーに失敗しました", "error"));
       }
 
+      // スキーマ表示
       function showSchema() {
         const area = document.getElementById("schemaArea");
         if (area.style.display === "none") {
@@ -419,6 +558,7 @@
         }
       }
 
+      // スキーマコピー
       function copySchema() {
         if (!cachedSchema) return;
         navigator.clipboard.writeText(JSON.stringify(cachedSchema, null, 2))
@@ -426,6 +566,8 @@
           .catch(() => setStatus("コピーに失敗しました", "error"));
       }
 
+      // 初期化
+      setupEventListeners();
       load();
     </script>
   </body>
