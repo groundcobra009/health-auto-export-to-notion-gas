@@ -1,0 +1,117 @@
+{
+  "databaseName": "Health Daily",
+  "description": "Health Auto Exportから受信したヘルスデータの日次サマリー",
+  "properties": [
+    {
+      "name": "タイトル",
+      "type": "title",
+      "description": "YYYY-MM-DD形式の日付文字列（主キー）",
+      "example": "2026-01-03",
+      "required": true,
+      "note": "Notion側でデフォルトで存在するTitleプロパティの名前を「タイトル」に変更"
+    },
+    {
+      "name": "日付",
+      "type": "date",
+      "description": "フィルタ/upsert用の日付プロパティ",
+      "example": "2026-01-03",
+      "required": true,
+      "note": "GASがこの日付でページを検索し、同日があれば更新"
+    },
+    {
+      "name": "歩数",
+      "type": "number",
+      "description": "1日の合計歩数",
+      "example": 8234,
+      "required": true,
+      "haeMetric": "step_count"
+    },
+    {
+      "name": "アクティブエネルギー(kcal)",
+      "type": "number",
+      "description": "消費した活動エネルギー（kcal）",
+      "example": 412,
+      "required": true,
+      "haeMetric": "active_energy"
+    },
+    {
+      "name": "距離(km)",
+      "type": "number",
+      "description": "歩行/走行距離（km単位に変換済み）",
+      "example": 6.2,
+      "required": true,
+      "haeMetric": "distance_walking_running"
+    },
+    {
+      "name": "睡眠(合計/分)",
+      "type": "number",
+      "description": "合計睡眠時間（分）",
+      "example": 390,
+      "required": true,
+      "haeMetric": "sleep_analysis"
+    },
+    {
+      "name": "体重(kg)",
+      "type": "number",
+      "description": "体重（kg）※その日の最新値",
+      "example": 68.4,
+      "required": true,
+      "haeMetric": "body_mass"
+    },
+    {
+      "name": "体脂肪(%)",
+      "type": "number",
+      "description": "体脂肪率（%）※その日の最新値",
+      "example": 18.2,
+      "required": true,
+      "haeMetric": "body_fat_percentage"
+    },
+    {
+      "name": "最終同期",
+      "type": "date",
+      "description": "GASからの最終更新日時（ISO 8601形式）",
+      "example": "2026-01-03T07:12:00.000Z",
+      "required": true,
+      "note": "GASが自動で現在時刻を書き込む"
+    },
+    {
+      "name": "セッションID",
+      "type": "rich_text",
+      "description": "HAEのセッション識別子",
+      "example": "abc123",
+      "required": false,
+      "note": "デバッグ用（任意）"
+    },
+    {
+      "name": "メモ",
+      "type": "rich_text",
+      "description": "自由記述用",
+      "example": "",
+      "required": false,
+      "note": "手動入力用（GASは書き込まない）"
+    }
+  ],
+  "setup": {
+    "steps": [
+      "1. Notionで新しいデータベースを作成",
+      "2. デフォルトの「名前」プロパティを「タイトル」にリネーム",
+      "3. 上記propertiesの各項目をNotionで追加（typeに注意）",
+      "4. Integrationを作成し、データベースにコネクト",
+      "5. Integration TokenとDatabase IDをGAS設定に入力"
+    ],
+    "notionIntegrationUrl": "https://www.notion.so/my-integrations"
+  },
+  "gasMapping": {
+    "NOTION_PROPS.TITLE": "タイトル",
+    "NOTION_PROPS.DATE": "日付",
+    "NOTION_PROPS.STEPS": "歩数",
+    "NOTION_PROPS.ACTIVE_ENERGY": "アクティブエネルギー(kcal)",
+    "NOTION_PROPS.DISTANCE": "距離(km)",
+    "NOTION_PROPS.SLEEP_MIN": "睡眠(合計/分)",
+    "NOTION_PROPS.WEIGHT": "体重(kg)",
+    "NOTION_PROPS.BODY_FAT": "体脂肪(%)",
+    "NOTION_PROPS.LAST_SYNC": "最終同期",
+    "NOTION_PROPS.SESSION_ID": "セッションID"
+  }
+}
+

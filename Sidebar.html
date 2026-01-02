@@ -1,0 +1,432 @@
+<!doctype html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        padding: 12px;
+        margin: 0;
+        font-size: 13px;
+        color: #1a1a1a;
+      }
+      h3 {
+        font-size: 14px;
+        margin: 16px 0 8px 0;
+        padding-bottom: 6px;
+        border-bottom: 1px solid #e0e0e0;
+        color: #333;
+      }
+      h3:first-child { margin-top: 0; }
+      .row { margin-bottom: 14px; }
+      .label {
+        font-size: 12px;
+        margin-bottom: 6px;
+        color: #555;
+        font-weight: 500;
+      }
+      .fieldWrap { display: flex; align-items: center; gap: 6px; }
+      input[type="text"], input[type="password"] {
+        flex: 1;
+        padding: 9px 10px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 13px;
+        transition: border-color 0.2s;
+      }
+      input:focus {
+        outline: none;
+        border-color: #4a90d9;
+      }
+      .eyeBtn {
+        width: 34px;
+        height: 34px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background: #fff;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        user-select: none;
+        font-size: 16px;
+        transition: background 0.2s;
+      }
+      .eyeBtn:hover { background: #f5f5f5; }
+      .btnRow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      button {
+        padding: 9px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        transition: all 0.2s;
+      }
+      button.primary {
+        background: #1a73e8;
+        color: #fff;
+        border: none;
+      }
+      button.primary:hover { background: #1557b0; }
+      button.secondary {
+        background: #fff;
+        color: #1a73e8;
+        border: 1px solid #1a73e8;
+      }
+      button.secondary:hover { background: #e8f0fe; }
+      button.tertiary {
+        background: #f3f3f3;
+        color: #333;
+        border: 1px solid #ddd;
+      }
+      button.tertiary:hover { background: #e8e8e8; }
+      button.success {
+        background: #34a853;
+        color: #fff;
+        border: none;
+      }
+      button.success:hover { background: #2d8e47; }
+      .hint {
+        font-size: 11px;
+        color: #666;
+        margin-top: 6px;
+        line-height: 1.5;
+      }
+      .hint code {
+        background: #f0f0f0;
+        padding: 2px 5px;
+        border-radius: 3px;
+        font-family: "SF Mono", Monaco, monospace;
+        font-size: 10px;
+      }
+      .status {
+        font-size: 12px;
+        margin-top: 12px;
+        padding: 10px;
+        background: #f9f9f9;
+        border-radius: 6px;
+        white-space: pre-wrap;
+        line-height: 1.5;
+        min-height: 40px;
+      }
+      .status.success { background: #e6f4ea; color: #137333; }
+      .status.error { background: #fce8e6; color: #c5221f; }
+      .status.info { background: #e8f0fe; color: #1a73e8; }
+      .urlBox {
+        background: #f5f5f5;
+        padding: 8px 10px;
+        border-radius: 6px;
+        font-family: "SF Mono", Monaco, monospace;
+        font-size: 11px;
+        word-break: break-all;
+        margin-top: 6px;
+        border: 1px solid #e0e0e0;
+      }
+      .copyBtn {
+        font-size: 11px;
+        padding: 6px 10px;
+        margin-top: 6px;
+      }
+      .schemaBox {
+        background: #1e1e1e;
+        color: #d4d4d4;
+        padding: 10px;
+        border-radius: 6px;
+        font-family: "SF Mono", Monaco, monospace;
+        font-size: 10px;
+        overflow-x: auto;
+        max-height: 300px;
+        overflow-y: auto;
+        margin-top: 8px;
+        white-space: pre;
+      }
+      .divider {
+        height: 1px;
+        background: #e0e0e0;
+        margin: 16px 0;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: 600;
+        margin-left: 6px;
+      }
+      .badge.required { background: #fce8e6; color: #c5221f; }
+      .badge.optional { background: #e8f0fe; color: #1a73e8; }
+    </style>
+  </head>
+
+  <body>
+    <!-- Notion設定 -->
+    <h3>🔗 Notion 接続設定</h3>
+
+    <div class="row">
+      <div class="label">Notion Integration Token <span class="badge required">必須</span></div>
+      <div class="fieldWrap">
+        <input id="notionToken" type="password" autocomplete="off" placeholder="secret_xxx..." />
+        <div class="eyeBtn" onclick="toggleMask('notionToken')" title="表示/非表示">👁</div>
+      </div>
+      <div class="hint">
+        <a href="https://www.notion.so/my-integrations" target="_blank">Notion Integrations</a> で作成したトークン
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="label">Notion Database ID <span class="badge required">必須</span></div>
+      <div class="fieldWrap">
+        <input id="notionDatabaseId" type="password" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+        <div class="eyeBtn" onclick="toggleMask('notionDatabaseId')" title="表示/非表示">👁</div>
+      </div>
+      <div class="hint">
+        データベースURL: <code>notion.so/xxxxx?v=...</code> の xxxxx 部分
+      </div>
+    </div>
+
+    <div class="btnRow">
+      <button class="secondary" onclick="testNotion()">🔍 Notion接続テスト</button>
+      <button class="tertiary" onclick="validateNotionProps()">📋 プロパティ検証</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- HAE設定 -->
+    <h3>📱 Health Auto Export 設定</h3>
+
+    <div class="row">
+      <div class="label">HAE Bearer Token <span class="badge optional">任意</span></div>
+      <div class="fieldWrap">
+        <input id="haeBearerToken" type="password" autocomplete="off" placeholder="認証トークン（省略可）" />
+        <div class="eyeBtn" onclick="toggleMask('haeBearerToken')" title="表示/非表示">👁</div>
+      </div>
+      <div class="hint">
+        設定すると、HAEからの受信時に認証チェックを行います
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="label">WebApp URL（HAEに設定するURL）</div>
+      <div id="webappUrlBox" class="urlBox">読み込み中...</div>
+      <button class="copyBtn tertiary" onclick="copyWebAppUrl()">📋 URLをコピー</button>
+    </div>
+
+    <div class="btnRow">
+      <button class="success" onclick="testHaeReceive()">🧪 テスト受信（サンプルデータ）</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- エラー通知 -->
+    <h3>🔔 エラー通知（任意）</h3>
+
+    <div class="row">
+      <div class="label">Webhook URL <span class="badge optional">任意</span></div>
+      <div class="fieldWrap">
+        <input id="errorWebhookUrl" type="password" autocomplete="off" placeholder="https://hooks.slack.com/..." />
+        <div class="eyeBtn" onclick="toggleMask('errorWebhookUrl')" title="表示/非表示">👁</div>
+      </div>
+      <div class="hint">
+        Discord / Slack 等のWebhook URLを設定するとエラー時に通知
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 保存ボタン -->
+    <div class="btnRow">
+      <button class="primary" onclick="save()">💾 設定を保存</button>
+      <button class="tertiary" onclick="showSchema()">📄 DBスキーマJSON</button>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <!-- スキーマ表示エリア -->
+    <div id="schemaArea" style="display:none;">
+      <h3>📄 Notionデータベース スキーマ</h3>
+      <div class="hint">以下のプロパティをNotion側で作成してください</div>
+      <div id="schemaBox" class="schemaBox"></div>
+      <button class="copyBtn tertiary" onclick="copySchema()">📋 JSONをコピー</button>
+    </div>
+
+    <script>
+      const MASK = "●●●●●●";
+      const real = {
+        notionToken: "",
+        notionDatabaseId: "",
+        haeBearerToken: "",
+        errorWebhookUrl: "",
+      };
+      const shown = {
+        notionToken: false,
+        notionDatabaseId: false,
+        haeBearerToken: false,
+        errorWebhookUrl: false,
+      };
+
+      let cachedWebAppUrl = "";
+      let cachedSchema = null;
+
+      function setStatus(msg, type) {
+        const el = document.getElementById("status");
+        el.textContent = msg || "";
+        el.className = "status" + (type ? " " + type : "");
+      }
+
+      function applyMasked(id) {
+        const el = document.getElementById(id);
+        if (!real[id]) {
+          el.value = "";
+          return;
+        }
+        el.value = shown[id] ? real[id] : MASK;
+        el.type = shown[id] ? "text" : "password";
+      }
+
+      function toggleMask(id) {
+        shown[id] = !shown[id];
+        applyMasked(id);
+      }
+
+      function load() {
+        setStatus("読み込み中...", "info");
+        google.script.run
+          .withSuccessHandler((s) => {
+            real.notionToken = s.notionToken || "";
+            real.notionDatabaseId = s.notionDatabaseId || "";
+            real.haeBearerToken = s.haeBearerToken || "";
+            real.errorWebhookUrl = s.errorWebhookUrl || "";
+            Object.keys(real).forEach((k) => applyMasked(k));
+            setStatus("");
+          })
+          .withFailureHandler((e) => setStatus("読み込み失敗: " + e, "error"))
+          .getSettingsForUi();
+
+        // WebApp URL取得
+        google.script.run
+          .withSuccessHandler((res) => {
+            const box = document.getElementById("webappUrlBox");
+            if (res.ok) {
+              cachedWebAppUrl = res.url;
+              box.textContent = res.url;
+            } else {
+              box.textContent = "⚠️ " + res.error;
+            }
+          })
+          .withFailureHandler((e) => {
+            document.getElementById("webappUrlBox").textContent = "⚠️ 取得失敗";
+          })
+          .getWebAppUrl();
+      }
+
+      function getInputValue(id) {
+        return shown[id] ? document.getElementById(id).value : real[id];
+      }
+
+      function save() {
+        const payload = {
+          notionToken: getInputValue("notionToken"),
+          notionDatabaseId: getInputValue("notionDatabaseId"),
+          haeBearerToken: getInputValue("haeBearerToken"),
+          errorWebhookUrl: getInputValue("errorWebhookUrl"),
+        };
+
+        setStatus("保存中...", "info");
+        google.script.run
+          .withSuccessHandler(() => {
+            Object.keys(payload).forEach((k) => {
+              real[k] = payload[k] || "";
+              shown[k] = false;
+              applyMasked(k);
+            });
+            setStatus("✅ 設定を保存しました", "success");
+          })
+          .withFailureHandler((e) => setStatus("保存失敗: " + e, "error"))
+          .saveSettingsFromUi(payload);
+      }
+
+      function testNotion() {
+        setStatus("Notion接続テスト中...", "info");
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (res.ok) {
+              setStatus("✅ Notion接続OK\nAPIトークンとDatabase IDは正常です", "success");
+            } else {
+              setStatus("❌ Notion接続NG\n" + res.error, "error");
+            }
+          })
+          .withFailureHandler((e) => setStatus("テスト失敗: " + e, "error"))
+          .testNotionConnection();
+      }
+
+      function validateNotionProps() {
+        setStatus("プロパティを検証中...", "info");
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (res.ok) {
+              setStatus(res.message, "success");
+            } else {
+              setStatus(res.error, "error");
+            }
+          })
+          .withFailureHandler((e) => setStatus("検証失敗: " + e, "error"))
+          .validateNotionDatabaseProperties();
+      }
+
+      function testHaeReceive() {
+        setStatus("テスト受信中...", "info");
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (res.ok) {
+              setStatus(res.message, "success");
+            } else {
+              setStatus("❌ テスト受信失敗\n" + res.error, "error");
+            }
+          })
+          .withFailureHandler((e) => setStatus("テスト失敗: " + e, "error"))
+          .testHaeReceive();
+      }
+
+      function copyWebAppUrl() {
+        if (!cachedWebAppUrl) {
+          setStatus("URLが取得できていません", "error");
+          return;
+        }
+        navigator.clipboard.writeText(cachedWebAppUrl)
+          .then(() => setStatus("✅ URLをクリップボードにコピーしました", "success"))
+          .catch(() => setStatus("コピーに失敗しました", "error"));
+      }
+
+      function showSchema() {
+        const area = document.getElementById("schemaArea");
+        if (area.style.display === "none") {
+          area.style.display = "block";
+          if (!cachedSchema) {
+            google.script.run
+              .withSuccessHandler((schema) => {
+                cachedSchema = schema;
+                document.getElementById("schemaBox").textContent = JSON.stringify(schema, null, 2);
+              })
+              .getNotionDatabaseSchema();
+          }
+        } else {
+          area.style.display = "none";
+        }
+      }
+
+      function copySchema() {
+        if (!cachedSchema) return;
+        navigator.clipboard.writeText(JSON.stringify(cachedSchema, null, 2))
+          .then(() => setStatus("✅ スキーマJSONをコピーしました", "success"))
+          .catch(() => setStatus("コピーに失敗しました", "error"));
+      }
+
+      load();
+    </script>
+  </body>
+</html>
